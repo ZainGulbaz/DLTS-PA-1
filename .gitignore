@@ -1,0 +1,10 @@
+__pycache__/
+.ipynb_checkpoints/
+.venv/
+*.aux
+*.log
+*.out
+*.toc
+Question 1/checkpoints/
+Question 2 - Leaderboard/results/w*.pt
+Question 2 - Leaderboard/smoke_results/

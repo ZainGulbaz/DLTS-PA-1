@@ -1,0 +1,179 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=17mm]{geometry}
+\usepackage{graphicx,booktabs,hyperref,placeins,amsmath}
+\hypersetup{colorlinks=true,urlcolor=blue}
+\setlength{\parindent}{0pt}\setlength{\parskip}{5pt}
+\setlength{\emergencystretch}{1em}
+\begin{document}
+\begin{center}\Large AI651 Assignment 1: Temporal Modeling\end{center}
+Zain Gulbaz --- 25280005\par
+Repository: \url{https://github.com/ZainGulbaz/DLTS-PA-1}\par
+\section*{Task 1: Forecasting across heterogeneous sensors}
+\textbf{Protocol.} All assessed evidence uses the full preset (6,000 steps per neural model), data/model seed 0, and CUDA. Each example observes 96 samples and forecasts 48. Models and the fixed scale use only Stations 1--3 training readings. Validation selects deployment models; Station 4 is excluded from fitting. No eligible window crosses a regime boundary. All error values below are in physical units: RMSE in $\mathrm{m/s^2}$ and MSE in $(\mathrm{m/s^2})^2$.
+
+\subsection*{Response 1A: prediction, measurement and revision}
+The notebook recorded this prediction before Output 1.1: for established stations, period-routed ridge, Raw Attention, sensor-specific ridge, shared ridge, in ascending error order. For Station 4: period-routed ridge, Raw Attention, shared ridge; sensor-specific ridge cannot serve an unfitted station.
+
+The measured established ordering is period-routed ridge ($0.1659$), Raw Attention ($0.4362$), shared ridge ($0.7667$), sensor-specific ridge ($0.7680$). Thus the two fixed ridge variants swap their predicted order, with a negligible $0.0013$ RMSE gap. The held-out ordering matches the prediction: $0.1727$, $0.6390$, $0.8756$. Period routing reduces shared-ridge RMSE by $0.6008$ (78.4\%) on established stations and $0.7030$ (80.3\%) on Station 4. Its advantage over Raw Attention is $0.2703$ and $0.4663$, respectively.
+
+\textbf{Established-station validation (Output 1.1).}
+\begin{center}\resizebox{\linewidth}{!}{%
+\begin{tabular}{llllll}
+\toprule
+Model & RMSE & MSE & A RMSE & B RMSE & C RMSE \\
+\midrule
+Shared ridge & 0.7667 & 0.5878 & 0.8052 & 0.8542 & 0.6208 \\
+Sensor-specific ridge & 0.7680 & 0.5898 & 0.8039 & 0.8519 & 0.6303 \\
+Period-routed ridge & 0.1659 & 0.0275 & 0.1807 & 0.1643 & 0.1515 \\
+Raw Attention & 0.4362 & 0.1903 & 0.4364 & 0.4613 & 0.4094 \\
+\bottomrule\end{tabular}}\end{center}
+\textbf{Station 4 validation (Output 1.1).}
+\begin{center}\resizebox{\linewidth}{!}{%
+\begin{tabular}{llllll}
+\toprule
+Model & RMSE & MSE & A RMSE & B RMSE & C RMSE \\
+\midrule
+Shared ridge & 0.8756 & 0.7667 & 0.9094 & 0.9820 & 0.7132 \\
+Sensor-specific ridge & -- & -- & -- & -- & -- \\
+Period-routed ridge & 0.1727 & 0.0298 & 0.1839 & 0.1821 & 0.1498 \\
+Raw Attention & 0.6390 & 0.4083 & 0.6355 & 0.6082 & 0.6716 \\
+\bottomrule\end{tabular}}\end{center}
+Period-routed ridge wins for every product in both populations. Shared and sensor-specific ridge have their highest established error on Product B; shared ridge also struggles most on B for Station 4. Raw Attention's largest established error is on B, but its largest held-out error is on C. A station identity does not select its current pace, explaining why separate station matrices offer little benefit. Routing by estimated pace supplies the appropriate conditioning variable directly. Raw Attention adapts mixing from the context, but must learn around drift and untied position-pair relationships. The explicit pace bias outperforms greater neural flexibility on this benchmark.
+
+\subsection*{Response 1B: why the rule must depend on context}
+Output 1.2 compares Station 1 at periods $16.13$ and $30.09$ samples. In Product A, shared and sensor-specific ridge track the baseline but visibly flatten later peaks and lift the troughs; the second/third cycles lose vibration amplitude. In Product C they understate the later secondary peak around 1.8 seconds and lift the trough around 1.2 seconds. Their window RMSEs are $0.7788/0.7866$ on A and $0.4477/0.4358$ on C, versus routed-ridge $0.2321$ and $0.1499$. This is a visible shape compromise from fitting one continuation map across incompatible phase advances, not evidence that every error is purely a phase error.
+
+The frozen $W_Q,W_K,W_V$ produce different queries, keys and values for a changed input. The scores $QK^\top$ and their softmax weights therefore construct a new mixing matrix without refitting. Output 1.3 concentrates much weight on recent key positions, but its strong columns and query-dependent bands differ between A and C. Mean absolute weight difference is $0.01254$, with maximum $0.42765$. Ridge's fitted $W$ stays fixed. The maps establish context-dependent mixing; they do not establish recovery of the physical period.
+\begin{figure}[htbp]\centering
+\includegraphics[width=\linewidth]{\detokenize{../Question 1/results/design/1.2-1.pdf}}
+\caption{Output 1.2: one established station, two operating paces.}\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=\linewidth]{\detokenize{../Question 1/results/design/1.3-1.pdf}}
+\caption{Output 1.3: context-dependent Attention maps with unchanged projections.}\end{figure}
+\FloatBarrier
+\subsection*{Response 2: centered moving-average decomposition}
+The selected width is $41$. In Output 2.1's Station 2/Product C window, width 17 follows appreciable vibration, leaving a weak residual; widths 25 and 33 progressively smooth it. Width 41 gives the smoothest ramp-like trend and a visibly stronger repeating residual. Residual standard deviation increases from $0.5780$ at width 17 to $1.5723$ at width 41. At both endpoints the trend bends or flattens because endpoint replication overweights the nearest sample; neither the trend nor the residual is the generator's true component. The selected residual's period-projection diagnostic peaks near the run's actual 32-sample period, unlike the weak raw-context evidence.
+
+Output 2.2 uses only established-station training data and known synthetic periods for diagnostic scoring. Width 41 maximizes recovery within one sample ($99.85\%$, versus raw $68.67\%$). It does not minimize median period error: width 25 gives $0.1218$ samples versus $0.2158$ for width 41. The criterion favors reliable recovery across windows rather than the smallest typical error. Oracle truth is used to evaluate/select the filter, never as a neural input.
+
+\begin{center}\resizebox{\linewidth}{!}{%
+\begin{tabular}{lll}
+\toprule
+Representation & Recovery within 1 sample & Median period error \\
+\midrule
+raw & 0.6867 & 0.5248 \\
+width 17 & 0.9800 & 0.1573 \\
+width 25 & 0.9892 & 0.1218 \\
+width 33 & 0.9933 & 0.1424 \\
+width 41 & 0.9985 & 0.2158 \\
+\bottomrule\end{tabular}}\end{center}
+Output 2.3: decomposition reduces Attention validation RMSE from $0.4362$ to $0.3092$ on established stations (29.1\%) and from $0.6390$ to $0.4561$ on Station 4 (28.6\%). Separating a 240-sample slow component from 14--36-sample repetition is a sensible scale assumption: the trend head handles slow variation, while the encoder and repeated residual decompositions focus on repetition. An abrupt level shift would be smeared into both streams; a robust local median could resist isolated impulses, but gives up the moving mean's linearity and frequency response.
+\begin{figure}[htbp]\centering
+\includegraphics[width=\linewidth]{\detokenize{../Question 1/results/design/2.1-1.pdf}}
+\caption{Output 2.1: candidate widths and their estimated trend/residual streams.}\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=.8\linewidth]{\detokenize{../Question 1/results/design/2.2-1.pdf}}
+\caption{Output 2.2: training-only oracle recovery diagnostic.}\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=\linewidth]{\detokenize{../Question 1/results/design/2.3-1.pdf}}
+\caption{Output 2.3: Attention decomposition ablation and validation forecasts.}\end{figure}
+\FloatBarrier
+\subsection*{Response 3: delay scoring and aggregation}
+The supplied centered FFT example returns $[4,-4,4,-4]$, matching direct circular correlation. Aggregating $v=[10,20,30,40]$ with delays $[1,3]$ and weights $[0.75,0.25]$ returns $[35,15,25,25]$. In particular $z_0=0.75v_3+0.25v_1=35$: indexing is $(t-\tau)\bmod L$, not $(t+\tau)\bmod L$. The supplied numerical and gradient checks pass.
+
+In Output 3.2, the strongest interior recurrence peaks lie near delays 16 and 32: approximately $P=16.13$ and $2P=32.27$. Their residual correlations are $0.8960$ and $0.8969$; recurrence rises again near 48, approximately $3P$, at the plotted upper band edge. The raw signal instead has a broad low-delay correlation from the ramp and weak/negative evidence around later multiples. Removing the slow part exposes the recurring displacement structure, supporting a small set of shared delays rather than independent scores for every position pair. These are signal correlations, not trained query/key scores. Circular window boundaries can shift or distort the peaks.
+
+For an isolated transient, useful information depends on the event's particular position and shape, not repeated lag. Blending delayed copies could smear or repeat it. A rapidly changing within-window period similarly makes one global lag set align incompatible phases.
+\begin{figure}[htbp]\centering
+\includegraphics[width=\linewidth]{\detokenize{../Question 1/results/design/3.2-1.pdf}}
+\caption{Output 3.2: signal-level recurrence near the period and its multiples.}\end{figure}
+\FloatBarrier
+\clearpage
+\subsection*{Response 4: comparison and deployment}
+\textbf{Pre-experiment hypothesis (recorded before Output 4.1).} Decomposition should help most under prominent drift because it frees the mixer to represent repetition. Both upgrades may help, but their combined gains may overlap.
+\textbf{Stations 1--3 validation (Outputs 1.1/4.1).}
+\begin{center}\resizebox{\linewidth}{!}{%
+\begin{tabular}{lllll}
+\toprule
+Model & MSE & RMSE & Parameters & Fit seconds \\
+\midrule
+Shared ridge & 0.5878 & 0.7667 & 4608 & 0.0282 \\
+Sensor-specific ridge & 0.5898 & 0.7680 & 13824 & 0.1156 \\
+Period-routed ridge & 0.0275 & 0.1659 & 59904 & 0.0414 \\
+Raw Attention & 0.1903 & 0.4362 & 368368 & 69.6686 \\
+Attention + decomposition & 0.0956 & 0.3092 & 373024 & 90.7722 \\
+Raw delay mixer & 0.0494 & 0.2224 & 368370 & 109.8815 \\
+Autoformer-inspired & 0.0391 & 0.1978 & 373026 & 125.7552 \\
+\bottomrule\end{tabular}}\end{center}
+\textbf{Station 4 validation (Outputs 1.1/4.1).}
+\begin{center}\resizebox{\linewidth}{!}{%
+\begin{tabular}{lllll}
+\toprule
+Model & MSE & RMSE & Parameters & Fit seconds \\
+\midrule
+Shared ridge & 0.7667 & 0.8756 & 4608 & 0.0282 \\
+Sensor-specific ridge & -- & -- & 13824 & 0.1156 \\
+Period-routed ridge & 0.0298 & 0.1727 & 59904 & 0.0414 \\
+Raw Attention & 0.4083 & 0.6390 & 368368 & 69.6686 \\
+Attention + decomposition & 0.2080 & 0.4561 & 373024 & 90.7722 \\
+Raw delay mixer & 0.1095 & 0.3309 & 368370 & 109.8815 \\
+Autoformer-inspired & 0.0590 & 0.2430 & 373026 & 125.7552 \\
+\bottomrule\end{tabular}}\end{center}
+Delay mixing improves raw-input MSE by 0.1408/0.2988 for established/held-out stations; decomposition improves Attention by 0.0947/0.2003. Decomposition also improves delay mixing by 0.0103/0.0505, and delay mixing improves decomposed Attention by 0.0565/0.1490. Combined gains (0.1512/0.3492) are smaller than the sums of individual gains (0.2355/0.4990), supporting overlap in this run, not a causal explanation.
+
+Horizon RMSE generally rises with fluctuations. Raw Attention grows from 0.1461 to 0.5718 on established stations and 0.1607 to 0.8928 on Station 4. Autoformer-inspired ends at 0.2299/0.3116; routed ridge ends at 0.2280/0.2120 and remains comparatively stable. The combined model is best among neural models overall, although Output 4.1 shows individual contexts where it loses.
+
+Choose period-routed ridge for both populations: it has the lowest validation error, 59,904 parameters versus 373,026 for the combined model, and about 0.041 seconds fitting versus 125.76 seconds. These choices were stored before Output 4.3. Test RMSE is 0.1611/0.1826 for established/held-out stations. The domain-specific pace bias earns deployment despite lower flexibility.
+
+\begin{center}\resizebox{\linewidth}{!}{%
+\begin{tabular}{llllll}
+\toprule
+population & model & validation MSE & Validation RMSE & test MSE & Test RMSE \\
+\midrule
+established & Period-routed ridge & 0.0275 & 0.1659 & 0.0260 & 0.1611 \\
+held-out & Period-routed ridge & 0.0298 & 0.1727 & 0.0333 & 0.1826 \\
+\bottomrule\end{tabular}}\end{center}
+\begin{figure}[htbp]\centering
+\includegraphics[width=\linewidth]{\detokenize{../Question 1/results/design/4.1-1.pdf}}
+\caption{Output 4.1: contrasting validation contexts; aggregate gains need not hold for every window.}\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=\linewidth]{\detokenize{../Question 1/results/design/4.2-1.pdf}}
+\caption{Output 4.2: physical-unit validation RMSE by forecast horizon.}\end{figure}
+\FloatBarrier
+\section*{Task 2: Autoformer forecasting}
+\textbf{Data and validation.} The target has 43,656 observed, complete nonnegative values; the horizon is exactly 168. No calendar identity or units are inferred. Training uses the first 42,312 observations. Eight consecutive nonoverlapping validation targets cover indices 42,313--43,656. At each origin, the model uses its available 336-sample observed context; later validation blocks may use earlier observed validation readings, but these never fit parameters or scaling. This rolling-origin protocol evaluates adaptation to observed history, not one 1,344-step open-loop forecast.
+
+Global target mean/standard deviation and each external-feature scale are fitted only on that training prefix. Global rather than window-relative scaling retains absolute level information. A training-only periodogram is exported for exploratory inspection; no fixed seasonal period or calendar feature is fed to the model. The decoder horizon contains zero seasonal target placeholders and the context-mean trend initialization, not future target values. Future external measurements are explicitly permitted by the brief. All ten enter together; no feature-specific causal or importance claim is made.
+
+\textbf{Architecture and training.} An original compact Autoformer adaptation uses a 336-step context, 84-step decoder label segment, 168-step prediction, one encoder and one decoder layer, four heads, width 32 or 64, feed-forward width twice the model width, dropout 0.1, and moving-average width 25. Query/key FFT correlation discovers top delays; weighted circular shifts aggregate values. Progressive decomposition occurs after encoder/decoder residual sublayers, and the decoder accumulates trend contributions. Historical external factors enter the encoder and observed label segment; known-horizon factors enter the decoder forecast segment. These mechanisms distinguish the model from point-wise Attention. Per-example delay selection, used consistently in train/eval, differs from the original batch-shared training convention.
+
+Training uses stride-24 windows, batch size 32, AdamW ($10^{-3}$ learning rate, $10^{-4}$ weight decay), normalized MSE, gradient clipping at 1, at most 12 epochs and patience 3. Physical-unit predictions are projected to nonnegative values for validation and final forecasting. This projection is appropriate for the known target constraint and is applied consistently. Configurations share validation blocks and seeds 0, 1, 2. Selection uses mean validation RMSE across seeds, rather than a favorable single run or leaderboard feedback.
+
+\subsection*{External-feature ablation and efficiency}
+
+\begin{center}\resizebox{\linewidth}{!}{%
+\begin{tabular}{llllll}
+\toprule
+Width & External & RMSE & MAE & sMAPE (\%) & P \\
+\midrule
+32 & None & 108.527 $\pm$ 2.058 & 85.436 $\pm$ 4.924 & 96.486 $\pm$ 2.841 & 21505 \\
+32 & 10 factors & 71.079 $\pm$ 3.873 & 53.969 $\pm$ 1.827 & 80.153 $\pm$ 2.282 & 23425 \\
+64 & None & 109.235 $\pm$ 0.897 & 88.138 $\pm$ 2.423 & 98.092 $\pm$ 1.049 & 83969 \\
+64 & 10 factors & 69.036 $\pm$ 0.691 & 51.581 $\pm$ 1.829 & 80.334 $\pm$ 2.192 & 87809 \\
+\bottomrule\end{tabular}}\end{center}
+Values are mean $\pm$ sample standard deviation across three seeds, each evaluated over all eight validation blocks. External factors reduce mean RMSE by $37.448$ at width 32 (34.5\%) and $40.199$ at width 64 (36.8\%). Every paired seed improves: RMSE reductions range $35.429$--$38.968$ at width 32 and $39.154$--$41.417$ at width 64. MAE and sMAPE also improve relative to the corresponding target-only configuration. Thus the evidence supports using the optional file; it does not identify which individual variable provides the signal.
+
+The width-64 external model has lower RMSE ($69.036$) and MAE ($51.581$) than the width-32 external model ($71.079$, $53.969$), but its sMAPE is slightly worse ($80.334$ versus $80.153$). Squared error emphasizes large absolute deviations, whereas sMAPE is relative and particularly sensitive at low levels. The widths' cross-seed spreads caution against treating the $2.043$ RMSE gap as a proven universal improvement. The smaller external model uses 23,425 parameters versus 87,809. Because the leaderboard cost coefficients are undisclosed, we cannot prove the larger model has the better penalized score; it was selected by the declared validation-RMSE rule.
+
+Diagnostic baselines average per-block RMSE $108.023$ (context mean) and $174.435$ (last value). These are averages of block RMSEs, whereas the neural table uses pooled RMSE, so their numerical differences should not be presented as an exact like-for-like gain. Both are useful checks against relying on short-lag persistence over the full horizon.
+
+\subsection*{Final forecast and declarations}
+The selected width-64 model uses all ten external variables. Seed 0 was fixed in advance for refitting. Selected validation best epochs were 3, 9, 4; their median determines a four-epoch refit on all 43,656 observed values, with scaling recomputed on that observed history. Seed 0's validation training spent six epochs; therefore declared $E=6+4=10$, not just its three-epoch best checkpoint. The final model has $P=87{,}809$ trainable parameters. All tuning runs spent 112 epochs in total, recorded separately; no ensemble is used.
+
+The exported list contains 168 finite forecasts in chronological order, for indices 43,657--43,824. Predictions, checkpoint, configuration, scalers and the parameter/epoch manifest are retained. Hidden target values and leaderboard scores are unavailable in the provided evidence: no held-out accuracy or leaderboard rank is claimed. At most five leaderboard attempts are allowed; the final list is intended for confirmation of this validation-chosen pipeline.
+\begin{figure}[htbp]\centering\includegraphics[width=\linewidth]{\detokenize{../Question 2 - Leaderboard/results/final_forecast.pdf}}\caption{Task 2: observed final context and the 168-step forecast; hidden target values are not shown.}\end{figure}
+\FloatBarrier
+\section*{Attribution and AI use}
+The course supplied the Task 1 harness, numerical checks and model skeletons. The three missing functions and execution tooling were completed with ChatGPT assistance. Task 2 is an original implementation of the Autoformer mechanisms described by Wu et al. (2021), \emph{Autoformer: Decomposition Transformers with Auto-Correlation for Long-Term Series Forecasting}, NeurIPS 2021, \url{https://arxiv.org/abs/2106.13008}; reference repository: \url{https://github.com/thuml/Autoformer}. Differences include compact single-layer defaults, per-example delay selection and explicit known-horizon covariate embeddings.
+\input{ai_disclosure.tex}
+\end{document}

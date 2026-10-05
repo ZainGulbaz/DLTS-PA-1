@@ -1,0 +1,26 @@
+\subsection*{Prompts and output}
+The student requested: ``can you please give me the end to end assignment'', after requesting a Google Drive/Colab workflow and filenames for each change. The scope was clarified against the attached PDF and the LMS instructions. ChatGPT produced implementations of the three missing Task 1 functions, the Colab runners, an Autoformer encoder--decoder training pipeline, and a report generator. Complete generated outputs are the source files included in this repository; key Task 1 outputs are shown below.
+\begin{verbatim}
+# RawAttentionForecaster.forward
+x = self.embed(context.transpose(1, 2)).transpose(1, 2) + self.position
+for block in self.blocks:
+    x = block(x)
+return self.forecast_head(self.norm(x).flatten(1))
+
+# SeriesDecomposition.forward
+padded = F.pad(x.transpose(1, 2),
+    (self.kernel // 2, self.kernel // 2), mode="replicate")
+trend = F.avg_pool1d(padded, self.kernel, 1).transpose(1, 2)
+return x - trend, trend
+
+# aggregate_delays: for each selected delay j
+indices = (positions[None, :] - delays[:, j, None]) % length
+indices = indices[:, None, None, :].expand(batch, heads, features, length)
+shifted = values.gather(-1, indices)
+mixed = mixed + weights[:, j, None, None, None] * shifted
+\end{verbatim}
+Task 2 output implements progressive decomposition inside the encoder and decoder, FFT query/key correlation, top-delay aggregation, decoder trend accumulation, and known-horizon covariate embeddings. It compares widths 32 and 64, with and without ten external factors, over seeds 0, 1, and 2 on identical validation blocks. Source output: \texttt{autoformer.py} and \texttt{train\_forecast.py} in the Task 2 folder.
+\subsection*{Edits and verification}
+The student supplied the roll number and repository URL and executed the full Colab workflows. The uploaded archive contains all 23 Task 1 code cells executed without errors, full-preset provenance, and Task 2 validation runs for seeds 0, 1, 2. No further model-code edits are evidenced in this review. After the student requested help with the packaging assertion, ChatGPT reviewed the uploaded full-run tables and figure PDFs, replaced unfinished notes with observations, quantified the external-feature ablation, distinguished pooled from per-block metrics, and rewrote the final-model declarations. This report text is AI-assisted; no personal unaided authorship or unrecorded experiment is claimed. The final forecasts have not been evaluated against hidden target values in the supplied evidence.
+
+Additional prompts: ``getting this error'' (packaging failure), followed by the assertion ``Replace report review notes with your observations.'' The student then supplied PA1-review.zip. The assistant's output was the revised LaTeX/PDF report and a checked submission archive. Edits from the earlier generated draft include the specific phase/shape observations in Response 1B; width and boundary observations in Response 2; lag peaks in Response 3; horizon, cost and overlap reasoning in Response 4; and explicit seed-wise Task 2 evidence and limitations. All reported numerical results are grounded in the uploaded full-run files.

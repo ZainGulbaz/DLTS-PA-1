@@ -1,0 +1,31 @@
+{
+  "config": {
+    "context": 336,
+    "horizon": 168,
+    "label": 84,
+    "width": 64,
+    "heads": 4,
+    "kernel": 25,
+    "external": 10,
+    "dropout": 0.1
+  },
+  "seed": 0,
+  "P": 87809,
+  "E": 10,
+  "validation_epochs_spent": 6,
+  "refit_epochs": 4,
+  "all_tuning_epochs": 112,
+  "selection": "seed-mean validation RMSE; fixed first seed; median best epoch for refit",
+  "epochs_limit": 12,
+  "validation_seeds": [
+    0,
+    1,
+    2
+  ],
+  "training_rows": 43656,
+  "forecast_first_index": 43657,
+  "forecast_last_index": 43824,
+  "device": "cuda",
+  "torch": "2.11.0+cu130",
+  "refit_seconds": 6.271892258999969
+}
